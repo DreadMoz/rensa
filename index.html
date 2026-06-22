@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食物連鎖シミュレータ - ねこ隊員特製</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for beautiful real-time population graphing -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome for clean, educational icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght=400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 py-3 px-6 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <span class="bg-emerald-600 text-white text-xs px-2.5 py-1 rounded-full font-bold">小6 理科</span>
+                <h1 class="text-xl md:text-2xl font-black tracking-wider text-emerald-400 flex items-center gap-2">
+                    <i class="fa-solid fa-seedling"></i> 生物の関わり（食物連鎖）シミュレータ
+                </h1>
+            </div>
+            <!-- Mode Selector (Pond vs Forest) -->
+            <div class="flex bg-slate-950 p-1.5 rounded-xl border border-slate-700 w-full md:w-auto">
+                <button id="btn-pond" onclick="switchMode('pond')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 bg-sky-600 text-white shadow-lg">
+                    <i class="fa-solid fa-water"></i> 池の生き物 (藻・ミジンコ・めだか)
+                </button>
+                <button id="btn-forest" onclick="switchMode('forest')" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-tree"></i> 森の生き物 (草・鹿・オオカミ)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Column: Simulation Canvas & Quick Add Controls (8 cols on large screens) -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            <!-- Canvas Container -->
+            <div class="bg-slate-950 rounded-2xl border-2 border-slate-700 overflow-hidden relative shadow-2xl flex flex-col">
+                <!-- Status/Indicator Panel -->
+                <div class="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-3 text-xs font-semibold z-10 shadow">
+                    <span id="current-mode-label" class="text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-dot animate-ping text-[8px]"></i> シミュレーション実行中
+                    </span>
+                </div>
+
+                <!-- Simulation Visual Field -->
+                <canvas id="sim-canvas" class="w-full bg-slate-950 aspect-[4/3] max-h-[480px] cursor-crosshair"></canvas>
+                
+                <!-- Legend & Quick Interaction Controls -->
+                <div class="bg-slate-900 border-t border-slate-700 p-3 grid grid-cols-3 gap-2 text-center text-xs md:text-sm">
+                    <!-- Producer Legend -->
+                    <button onclick="spawnEntityDirectly(0)" class="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition active:scale-95">
+                        <span id="legend-p0-emoji" class="text-2xl mb-1">🦠</span>
+                        <span id="legend-p0-name" class="font-bold text-emerald-400">生産者 (藻)</span>
+                        <span id="legend-p0-count" class="text-xs text-slate-400 font-mono mt-0.5">0匹</span>
+                        <span class="text-[10px] text-emerald-500 mt-1 bg-emerald-950 px-2 py-0.5 rounded-full"><i class="fa-solid fa-plus"></i> 追加</span>
+                    </button>
+                    <!-- Primary Consumer Legend -->
+                    <button onclick="spawnEntityDirectly(1)" class="flex flex-col items-center justify-center p-2 rounded-xl bg-amber-950/40 border border-amber-800/60 hover:bg-amber-900/50 transition active:scale-95">
+                        <span id="legend-p1-emoji" class="text-2xl mb-1">🦐</span>
+                        <span id="legend-p1-name" class="font-bold text-amber-400">一次消費者 (ミジンコ)</span>
+                        <span id="legend-p1-count" class="text-xs text-slate-400 font-mono mt-0.5">0匹</span>
+                        <span class="text-[10px] text-amber-500 mt-1 bg-amber-950 px-2 py-0.5 rounded-full"><i class="fa-solid fa-plus"></i> 追加</span>
+                    </button>
+                    <!-- Secondary Consumer Legend -->
+                    <button onclick="spawnEntityDirectly(2)" class="flex flex-col items-center justify-center p-2 rounded-xl bg-rose-950/40 border border-rose-800/60 hover:bg-rose-900/50 transition active:scale-95">
+                        <span id="legend-p2-emoji" class="text-2xl mb-1">🐟</span>
+                        <span id="legend-p2-name" class="font-bold text-rose-400">二次消費者 (めだか)</span>
+                        <span id="legend-p2-count" class="text-xs text-slate-400 font-mono mt-0.5">0匹</span>
+                        <span class="text-[10px] text-rose-500 mt-1 bg-rose-950 px-2 py-0.5 rounded-full"><i class="fa-solid fa-plus"></i> 追加</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-lg">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-play" onclick="togglePlay()" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm">
+                            <i id="play-icon" class="fa-solid fa-pause"></i> <span id="play-text">一時停止</span>
+                        </button>
+                        <button onclick="resetSimulation()" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-rotate-right"></i> リセット
+                        </button>
+                    </div>
+                    <!-- Speed Control -->
+                    <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
+                        <span class="text-slate-400">速度:</span>
+                        <button onclick="setSpeed(0.5)" id="btn-speed-0_5" class="px-2.5 py-1 rounded bg-slate-800 text-emerald-400 font-bold border border-emerald-500/30">0.5x (おそい)</button>
+                        <button onclick="setSpeed(1)" id="btn-speed-1" class="px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white">1x</button>
+                        <button onclick="setSpeed(2)" id="btn-speed-2" class="px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white">2x</button>
+                        <button onclick="setSpeed(4)" id="btn-speed-4" class="px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white">4x</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Graphs, Real-Time Stats & Teaching Guide (5 cols on large screens) -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+            <!-- Graph Card -->
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-lg flex flex-col h-[320px]">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-sm font-bold flex items-center gap-2 text-slate-300">
+                        <i class="fa-solid fa-chart-line text-cyan-400"></i> 個体数の変化（リアルタイム推移）
+                    </h2>
+                    <span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-slate-400 font-mono">
+                        生態系のバランスサイクル
+                    </span>
+                </div>
+                <div class="flex-1 min-h-0 relative">
+                    <canvas id="chart-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Simulation Settings (Advanced parameters for the teacher) -->
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-lg">
+                <h2 class="text-sm font-bold flex items-center gap-2 text-slate-300 mb-3 border-b border-slate-700 pb-2">
+                    <i class="fa-solid fa-sliders text-amber-400"></i> 環境パラメータの調整
+                </h2>
+                
+                <div class="space-y-4">
+                    <!-- Sunlight (Producer growth speed) -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-300 flex items-center gap-1">
+                                <i class="fa-solid fa-sun text-amber-500"></i> <span id="param-sunlight-name">日光の強さ（藻の増えやすさ）</span>
+                            </span>
+                            <span id="lbl-sunlight" class="font-mono text-emerald-400">ふつう</span>
+                        </div>
+                        <input id="slider-sunlight" type="range" min="1" max="5" value="3" oninput="updateParams()" class="w-full accent-emerald-500 bg-slate-900 h-2 rounded-lg cursor-pointer">
+                    </div>
+
+                    <!-- Safety Nets -->
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
+                        <label class="flex items-center gap-2.5 cursor-pointer">
+                            <input id="chk-extinction-prevent" type="checkbox" checked onchange="updateParams()" class="w-4 h-4 rounded text-emerald-600 bg-slate-800 border-slate-700 focus:ring-emerald-500">
+                            <div>
+                                <div class="text-xs font-bold text-slate-200">絶滅防止アシスト（安全装置）</div>
+                                <p class="text-[10px] text-slate-400 mt-0.5">個体が0に近づくと自動でわずかに復活し、シミュレーションが全滅するのを防ぎます。</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Educational Commentary / Teaching Guide -->
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-lg flex-1">
+                <h2 class="text-sm font-bold flex items-center gap-2 text-teal-400 mb-2">
+                    <i class="fa-solid fa-graduation-cap"></i> 授業での観察ポイント (教頭先生へ)
+                </h2>
+                <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                    <p>
+                        <strong class="text-white">1. 山と谷のズレ（遅れ）を観察させましょう：</strong><br>
+                        グラフを見ると、<span class="text-emerald-400 font-bold font-mono">生産者</span>が増えたあとに<span class="text-amber-400 font-bold font-mono">一次消費者</span>が増え、その後に<span class="text-rose-400 font-bold font-mono">二次消費者</span>が増えるという、波の時間的な「ズレ」が観察できます。
+                    </p>
+                    <p>
+                        <strong class="text-white">2. 一時停止での振り返り：</strong><br>
+                        「シミュレーションを一時停止して、一番肉食動物が増えた時、草はどうなっているか？」を児童に発問すると、食物連鎖の仕組みへの理解が深まります。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification system to replace alert() -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950 text-slate-500 py-3 text-center text-xs border-t border-slate-800">
+        <p>© ねこ隊員 ＆ 三宅小学校 応援プロジェクト (GIGAスクール・Chromebook対応版)</p>
+    </footer>
+
+    <script>
+        // --- ENVIRONMENT STATE & CONSTANTS ---
+        let currentMode = 'pond'; // 'pond' or 'forest'
+        let isPlaying = true;
+        let simSpeed = 0.5; // Default slower speed
+        let preventExtinction = true;
+
+        // Visual / UI mappings
+        const themeConfig = {
+            pond: {
+                bg: '#082f49', // deep sky blue ocean
+                gridColor: '#0c4a6e',
+                entities: [
+                    { emoji: '🦠', color: '#10b981', name: '藻', label: '生産者 (藻)' },
+                    { emoji: '🦐', color: '#f59e0b', name: 'ミジンコ', label: '一次消費者 (ミジンコ)' },
+                    { emoji: '🐟', color: '#f43f5e', name: 'めだか', label: '二次消費者 (メダカ)' }
+                ]
+            },
+            forest: {
+                bg: '#062f1c', // deep green forest
+                gridColor: '#064e3b',
+                entities: [
+                    { emoji: '🌿', color: '#10b981', name: '草', label: '生産者 (草)' },
+                    { emoji: '🦌', color: '#d97706', name: '鹿', label: '一次消費者 (シカ)' },
+                    { emoji: '🐺', color: '#e11d48', name: 'オオカミ', label: '二次消費者 (オオカミ)' }
+                ]
+            }
+        };
+
+        // Canvas setups
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+        let animationFrameId = null;
+
+        // Setup sizes (fixed simulation resolution for consistency across device screen sizes)
+        const simWidth = 800;
+        const simHeight = 600;
+        canvas.width = simWidth;
+        canvas.height = simHeight;
+
+        // --- SIMULATION ENTITIES & ECOSYSTEM RULES ---
+        let entities = [];
+
+        // Parameter configuration variables
+        let plantGrowthChance = 0.015; // Sunlight level
+        const maxPlants = 450;          // Upper carrying capacity
+
+        // Base entity classes representing Algae/Grass (0), Flea/Deer (1), Medaka/Wolf (2)
+        class Entity {
+            constructor(type, x, y) {
+                this.type = type; // 0, 1, or 2
+                this.x = x || Math.random() * simWidth;
+                this.y = y || Math.random() * simHeight;
+                this.size = type === 0 ? 6 : (type === 1 ? 14 : 20);
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                
+                // Ecological variables
+                this.energy = 100; // Starting energy for consumers
+                this.age = 0;
+                this.id = Math.random().toString(36).substr(2, 9);
+            }
+
+            update() {
+                this.age++;
+
+                if (this.type === 0) {
+                    // Plants are stationary
+                    return;
+                }
+
+                // Consumer logic
+                // 1. Move
+                this.x += this.vx * simSpeed;
+                this.y += this.vy * simSpeed;
+
+                // Bounce off borders
+                if (this.x < 10) { this.x = 10; this.vx *= -1; }
+                if (this.x > simWidth - 10) { this.x = simWidth - 10; this.vx *= -1; }
+                if (this.y < 10) { this.y = 10; this.vy *= -1; }
+                if (this.y > simHeight - 10) { this.y = simHeight - 10; this.vy *= -1; }
+
+                // Gradual random movement changes
+                if (Math.random() < 0.05) {
+                    this.vx += (Math.random() - 0.5) * 0.8;
+                    this.vy += (Math.random() - 0.5) * 0.8;
+                    // Cap max velocity
+                    const speedCap = this.type === 2 ? 3.5 : 2.2;
+                    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                    if (speed > speedCap) {
+                        this.vx = (this.vx / speed) * speedCap;
+                        this.vy = (this.vy / speed) * speedCap;
+                    }
+                }
+
+                // Sensory behavior (move slightly towards nearest food)
+                this.huntAndFlee();
+
+                // 2. Consume energy over time
+                const baseMetabolism = this.type === 2 ? 0.35 : 0.28;
+                this.energy -= baseMetabolism * simSpeed;
+            }
+
+            // Simple AI to direct consumers to nearest targets
+            huntAndFlee() {
+                let targetType = this.type === 2 ? 1 : 0; // Medaka -> Flea, Flea -> Algae
+                let nearest = null;
+                let minDist = 120; // Detection range
+
+                for (let i = 0; i < entities.length; i++) {
+                    let other = entities[i];
+                    if (other.type === targetType) {
+                        let dX = other.x - this.x;
+                        let dY = other.y - this.y;
+                        let dist = Math.sqrt(dX * dX + dY * dY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearest = other;
+                        }
+                    }
+                }
+
+                if (nearest) {
+                    // Move towards the food source slightly
+                    let dX = nearest.x - this.x;
+                    let dY = nearest.y - this.y;
+                    let len = Math.sqrt(dX * dX + dY * dY);
+                    if (len > 0) {
+                        let pull = 0.25;
+                        this.vx += (dX / len) * pull;
+                        this.vy += (dY / len) * pull;
+                    }
+                }
+            }
+
+            // Draw representations
+            draw() {
+                const config = themeConfig[currentMode].entities[this.type];
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.type === 0) {
+                    // Draw lush glowing vegetation
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = config.color;
+                    ctx.shadowBlur = 4;
+                    ctx.shadowColor = config.color;
+                    ctx.fill();
+                } else {
+                    // Draw Consumer emoji (beautiful, clear sprites)
+                    ctx.font = `${this.size + 4}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    
+                    // Simple flip direction based on velocity
+                    if (this.vx < 0) {
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.fillText(config.emoji, 0, 0);
+
+                    // Optional tiny health bar for Debug/Inquisitive students
+                    ctx.scale(this.vx < 0 ? -1 : 1, 1); // unflip text coordinates
+                    ctx.fillStyle = "rgba(0,0,0,0.5)";
+                    ctx.fillRect(-10, -this.size - 2, 20, 3);
+                    ctx.fillStyle = this.energy > 40 ? "#10b981" : "#f43f5e";
+                    ctx.fillRect(-10, -this.size - 2, Math.max(0, Math.min(20, (this.energy / 100) * 20)), 3);
+                }
+                ctx.restore();
+            }
+        }
+
+        function initEntities() {
+            entities = [];
+            // Balanced initial seed
+            // Producer
+            for (let i = 0; i < 200; i++) {
+                entities.push(new Entity(0));
+            }
+            // Primary Consumer
+            for (let i = 0; i < 40; i++) {
+                entities.push(new Entity(1));
+            }
+            // Secondary Consumer
+            for (let i = 0; i < 15; i++) {
+                entities.push(new Entity(2));
+            }
+            updateLegendCounters();
+        }
+
+        // --- REAL-TIME CHART SYSTEM ---
+        let chart;
+        let chartData = {
+            labels: [],
+            datasets: [
+                {
+                    label: '生産者 (藻)',
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    data: [],
+                    pointRadius: 0,
+                    fill: true
+                },
+                {
+                    label: '一次消費者 (ミジンコ)',
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 3,
+                    data: [],
+                    pointRadius: 0,
+                    fill: true
+                },
+                {
+                    label: '二次消費者 (めだか)',
+                    borderColor: '#f43f5e',
+                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    borderWidth: 3,
+                    data: [],
+                    pointRadius: 0,
+                    fill: true
+                }
+            ]
+        };
+
+        function initChart() {
+            const chartCtx = document.getElementById('chart-canvas').getContext('2d');
+            if (chart) {
+                chart.destroy();
+            }
+            
+            // Setup dynamic theme titles
+            const activeTheme = themeConfig[currentMode].entities;
+            chartData.datasets[0].label = activeTheme[0].label;
+            chartData.datasets[1].label = activeTheme[1].label;
+            chartData.datasets[2].label = activeTheme[2].label;
+
+            chartData.labels = [];
+            chartData.datasets[0].data = [];
+            chartData.datasets[1].data = [];
+            chartData.datasets[2].data = [];
+
+            chart = new Chart(chartCtx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#94a3b8',
+                                font: { size: 10, weight: 'bold' }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false // hide time tickers for simplicity
+                        },
+                        y: {
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            min: 0
+                        }
+                    },
+                    animation: {
+                        duration: 0 // instantly update for simulation smoothness
+                    }
+                }
+            });
+        }
+
+        let timeTick = 0;
+        function updateChartData(p0Count, p1Count, p2Count) {
+            timeTick++;
+            chartData.labels.push(timeTick);
+            chartData.datasets[0].data.push(p0Count);
+            chartData.datasets[1].data.push(p1Count);
+            chartData.datasets[2].data.push(p2Count);
+
+            // Keep the sliding window of data to show cycles clearly
+            const windowLimit = 150;
+            if (chartData.labels.length > windowLimit) {
+                chartData.labels.shift();
+                chartData.datasets[0].data.shift();
+                chartData.datasets[1].data.shift();
+                chartData.datasets[2].data.shift();
+            }
+            chart.update();
+        }
+
+        function updateLegendCounters() {
+            let counts = [0, 0, 0];
+            for (let i = 0; i < entities.length; i++) {
+                counts[entities[i].type]++;
+            }
+            document.getElementById('legend-p0-count').innerText = `${counts[0]}匹`;
+            document.getElementById('legend-p1-count').innerText = `${counts[1]}匹`;
+            document.getElementById('legend-p2-count').innerText = `${counts[2]}匹`;
+            return counts;
+        }
+
+        // --- COLLISION, EATING, AND REPRODUCTION LOGIC ---
+        function runSimulationCycle() {
+            if (!isPlaying) return;
+
+            // 1. Spawning plants organically (Sunlight dependent)
+            const activePlants = entities.filter(e => e.type === 0).length;
+            if (activePlants < maxPlants) {
+                // Growth chances
+                const actualChances = plantGrowthChance * simSpeed;
+                for (let i = 0; i < Math.floor(6 * simSpeed); i++) {
+                    if (Math.random() < actualChances) {
+                        entities.push(new Entity(0));
+                    }
+                }
+            }
+
+            // 2. Collision resolution & Inter-agent action
+            const primaryRadius = 14;
+            const secondaryRadius = 18;
+
+            // Temp container for newborns
+            let spawns = [];
+
+            for (let i = 0; i < entities.length; i++) {
+                const a = entities[i];
+                a.update();
+
+                // Extinction safety nets
+                // Level 0 (Plant) shouldn't reach zero easily, but if so spawn them
+                
+                // Consumer updates & Eating/Birth loops
+                if (a.type === 1) { // Primary Consumer
+                    // Find closest plant (type 0) to eat
+                    for (let j = 0; j < entities.length; j++) {
+                        const b = entities[j];
+                        if (b.type === 0) {
+                            const dX = a.x - b.x;
+                            const dY = a.y - b.y;
+                            const dist = Math.sqrt(dX * dX + dY * dY);
+                            if (dist < primaryRadius) {
+                                // EAT!
+                                a.energy = Math.min(100, a.energy + 32); // heal energy
+                                b.energy = -99; // Flag plant for removal
+                                break; // eats one plant per cycle maximum
+                            }
+                        }
+                    }
+
+                    // Check for birth logic
+                    if (a.energy > 85 && Math.random() < 0.04) {
+                        a.energy -= 45;
+                        // Give birth near parent
+                        const baby = new Entity(1, a.x + (Math.random() - 0.5) * 15, a.y + (Math.random() - 0.5) * 15);
+                        baby.energy = 50;
+                        spawns.push(baby);
+                    }
+                } 
+                else if (a.type === 2) { // Secondary Consumer (Predator)
+                    // Hunt primary consumer
+                    for (let j = 0; j < entities.length; j++) {
+                        const b = entities[j];
+                        if (b.type === 1) {
+                            const dX = a.x - b.x;
+                            const dY = a.y - b.y;
+                            const dist = Math.sqrt(dX * dX + dY * dY);
+                            if (dist < secondaryRadius) {
+                                // EAT!
+                                a.energy = Math.min(100, a.energy + 50); // huge energy boost
+                                b.energy = -99; // Flag prey for removal
+                                break;
+                            }
+                        }
+                    }
+
+                    // Birth logic for predator
+                    if (a.energy > 88 && Math.random() < 0.035) {
+                        a.energy -= 50;
+                        const baby = new Entity(2, a.x + (Math.random() - 0.5) * 15, a.y + (Math.random() - 0.5) * 15);
+                        baby.energy = 60;
+                        spawns.push(baby);
+                    }
+                }
+            }
+
+            // Keep alive agents (energy > 0) and remove eaten items
+            entities = entities.filter(e => {
+                if (e.type === 0) {
+                    return e.energy > 0; // plants only die from getting eaten
+                }
+                return e.energy > 0; // consumers die from hunger too
+            });
+
+            // Append newborns to ecosystem
+            entities = entities.concat(spawns);
+
+            // --- SAFETY NET ASSIST ENGINE ---
+            const counts = updateLegendCounters();
+            if (preventExtinction) {
+                // Rescue plant extinction
+                if (counts[0] < 12) {
+                    for (let i = 0; i < 15; i++) entities.push(new Entity(0));
+                }
+                // Rescue primary consumer
+                if (counts[1] < 5) {
+                    for (let i = 0; i < 6; i++) {
+                        let rescuer = new Entity(1);
+                        rescuer.energy = 75;
+                        entities.push(rescuer);
+                    }
+                }
+                // Rescue secondary predator extinction
+                if (counts[2] < 2) {
+                    for (let i = 0; i < 2; i++) {
+                        let rescuer = new Entity(2);
+                        rescuer.energy = 85;
+                        entities.push(rescuer);
+                    }
+                }
+            }
+        }
+
+        function render() {
+            // Draw background & grid representation
+            const activeTheme = themeConfig[currentMode];
+            ctx.fillStyle = activeTheme.bg;
+            ctx.fillRect(0, 0, simWidth, simHeight);
+
+            // Tech style matrix/grid lines representing environment cells
+            ctx.strokeStyle = activeTheme.gridColor;
+            ctx.lineWidth = 1;
+            const gridSize = 80;
+            for (let x = 0; x < simWidth; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, simHeight);
+                ctx.stroke();
+            }
+            for (let y = 0; y < simHeight; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(simWidth, y);
+                ctx.stroke();
+            }
+
+            // Draw all organisms
+            for (let i = 0; i < entities.length; i++) {
+                entities[i].draw();
+            }
+        }
+
+        // Main Loop
+        let chartCounter = 0;
+        function loop() {
+            if (isPlaying) {
+                runSimulationCycle();
+                
+                // Only advance graph when playing
+                chartCounter += simSpeed;
+                if (chartCounter >= 15) {
+                    const totals = updateLegendCounters();
+                    updateChartData(totals[0], totals[1], totals[2]);
+                    chartCounter = 0;
+                }
+            }
+            // Render is still called to keep canvas responsive and visible during pause
+            render();
+
+            animationFrameId = requestAnimationFrame(loop);
+        }
+
+        // --- INTERACTIVE & CONTROL FUNCTIONS ---
+
+        // 1. Switch simulation mode Pond/Forest
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // Toggle visual tab button styles
+            const btnPond = document.getElementById('btn-pond');
+            const btnForest = document.getElementById('btn-forest');
+            
+            if (mode === 'pond') {
+                btnPond.className = "flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 bg-sky-600 text-white shadow-lg";
+                btnForest.className = "flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 text-slate-400 hover:text-white";
+                showToast("【池の生き物】モードに変更しました");
+            } else {
+                btnForest.className = "flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 bg-emerald-600 text-white shadow-lg";
+                btnPond.className = "flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 text-slate-400 hover:text-white";
+                showToast("【森の生き物】モードに変更しました");
+            }
+
+            // Update text labels
+            const activeTheme = themeConfig[mode].entities;
+            document.getElementById('legend-p0-emoji').innerText = activeTheme[0].emoji;
+            document.getElementById('legend-p0-name').innerText = `生産者 (${activeTheme[0].name})`;
+            document.getElementById('legend-p1-emoji').innerText = activeTheme[1].emoji;
+            document.getElementById('legend-p1-name').innerText = `一次消費者 (${activeTheme[1].name})`;
+            document.getElementById('legend-p2-emoji').innerText = activeTheme[2].emoji;
+            document.getElementById('legend-p2-name').innerText = `二次消費者 (${activeTheme[2].name})`;
+            
+            document.getElementById('param-sunlight-name').innerText = `日光の強さ（${activeTheme[0].name}の増えやすさ）`;
+
+            // Clean reset to populate with new mode
+            resetSimulation();
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const icon = document.getElementById('play-icon');
+            const txt = document.getElementById('play-text');
+            const btn = document.getElementById('btn-play');
+
+            if (isPlaying) {
+                icon.className = "fa-solid fa-pause";
+                txt.innerText = "一時停止";
+                btn.className = "bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm";
+                showToast("シミュレーションを再開しました");
+            } else {
+                icon.className = "fa-solid fa-play";
+                txt.innerText = "シミュレーション開始";
+                btn.className = "bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg transition flex items-center gap-2 text-sm";
+                showToast("シミュレーションを一時停止しました（グラフも停止中）");
+            }
+        }
+
+        function setSpeed(speed) {
+            simSpeed = speed;
+            
+            // Update button styles including 0.5x
+            [0.5, 1, 2, 4].forEach(s => {
+                const idStr = s === 0.5 ? 'btn-speed-0_5' : `btn-speed-${s}`;
+                const btn = document.getElementById(idStr);
+                if (btn) {
+                    if (s === speed) {
+                        btn.className = "px-2.5 py-1 rounded bg-slate-800 text-emerald-400 font-bold border border-emerald-500/30";
+                    } else {
+                        btn.className = "px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white";
+                    }
+                }
+            });
+            showToast(`シミュレーション速度を ${speed}x に設定しました`);
+        }
+
+        function updateParams() {
+            const sunlightVal = parseInt(document.getElementById('slider-sunlight').value);
+            const sunLabels = ['極小', 'よわい', 'ふつう', '強い', 'かんかん照り'];
+            document.getElementById('lbl-sunlight').innerText = sunLabels[sunlightVal - 1];
+
+            // Adjust growth probability dynamically
+            // base config value is 0.015
+            plantGrowthChance = 0.005 * sunlightVal;
+
+            preventExtinction = document.getElementById('chk-extinction-prevent').checked;
+        }
+
+        // Quick add via Legend Buttons
+        function spawnEntityDirectly(type) {
+            const num = type === 0 ? 10 : (type === 1 ? 5 : 2);
+            for (let i = 0; i < num; i++) {
+                entities.push(new Entity(type));
+            }
+            const name = themeConfig[currentMode].entities[type].name;
+            showToast(`${name}を ${num}匹 追加しました！`);
+            updateLegendCounters();
+        }
+
+        // Tap on canvas to spawn producers
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = ((event.clientX - rect.left) / rect.width) * simWidth;
+            const clickY = ((event.clientY - rect.top) / rect.height) * simHeight;
+
+            // Spawns 3 items of the currently select-friendly Primary type to allow interaction
+            for (let i = 0; i < 3; i++) {
+                const scatterX = clickX + (Math.random() - 0.5) * 40;
+                const scatterY = clickY + (Math.random() - 0.5) * 40;
+                entities.push(new Entity(0, scatterX, scatterY)); // add custom food
+            }
+            showToast("タップ地点に餌を置きました！");
+        });
+
+        // Toast alert alternative
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = "bg-slate-800 text-emerald-300 border border-emerald-500/30 px-4 py-2 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 pointer-events-auto transition-all duration-300 opacity-0 transform translate-y-2";
+            toast.innerHTML = `<i class="fa-solid fa-cat text-emerald-400"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            // Animate In
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+
+            // Animate Out & Remove
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+
+        // Fully reset
+        function resetSimulation() {
+            timeTick = 0;
+            initEntities();
+            initChart();
+            // Set initial UI speed button display consistently
+            setSpeed(simSpeed);
+            showToast("シミュレーションを初期状態に戻しました");
+        }
+
+        // Start initialization
+        window.onload = function () {
+            initEntities();
+            initChart();
+            setSpeed(simSpeed); // Highlight default 0.5x button on load
+            loop(); // Kickoff main drawing loop
+        };
+    </script>
+</body>
+</html>
